@@ -246,7 +246,7 @@ if uploaded_file is not None:
         pdf3.cell(45, 7, cedente, 1, 0, "L")
         pdf3.cell(55, 7, info["turno"], 1, 0, "L")
         pdf3.cell(45, 7, ricevente, 1, 0, "L")
-        pdf3.cell(35, 7, "✓ OK", 1, 1, "L")
+        pdf3.cell(35, 7, "OK", 1, 1, "L")
       pdf3_bytes = bytes(pdf3.output())
 
       st.success("✅ Tutti e 3 i PDF sono stati generati con successo!")
