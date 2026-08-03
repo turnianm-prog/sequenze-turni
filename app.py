@@ -75,7 +75,7 @@ if uploaded_file is not None:
             details_map = {row["nome"]: row for row in data_giornaliera}
             all_active_names = [row["nome"] for row in data_giornaliera]
 
-            # Ordinamento automatico a partire dai turni delle ore 10:00 in poi
+            # Ordinamento automatico a partire dai turni delle ore 12:00 in poi
             start_index = 0
             for idx, row in enumerate(data_giornaliera):
               turno_str = row["turno"]
