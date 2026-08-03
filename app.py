@@ -11,7 +11,7 @@ st.title("📋 Generatore Automatico dei 3 PDF Turni")
 st.write(
     "Carica la foto della tabella: l'intelligenza artificiale leggerà"
     " autonomamente i dati reali, filtrerà solo i cambi validi e ordinerà la"
-    " catena dalle ore 10:00."
+    " catena dalle ore 12:00."
 )
 
 # Recupera la chiave dai Secrets di Streamlit in modo automatico e sicuro
@@ -80,17 +80,17 @@ if uploaded_file is not None:
             for idx, row in enumerate(data_giornaliera):
               turno_str = row["turno"]
               parts = turno_str.replace(",", ":").split()
-              found_ten = False
+              found_twelve = False
               for p in parts:
                 if ":" in p:
                   try:
                     hour = int(p.split(":")[0])
-                    if hour >= 10:
-                      found_ten = True
+                    if hour >= 12:
+                      found_twelve = True
                       break
                   except:
                     pass
-              if found_ten:
+              if found_twelve:
                 start_index = idx
                 break
 
@@ -130,7 +130,7 @@ if uploaded_file is not None:
             pdf2.cell(
                 0,
                 10,
-                "Catena Consequenziale (dalle ore 10:00)",
+                "Catena Consequenziale (dalle ore 12:00)",
                 ln=True,
                 align="center",
             )
@@ -161,7 +161,7 @@ if uploaded_file is not None:
             pdf3.cell(
                 0,
                 10,
-                "Matrice & Riepilogo Chiusura Circolare",
+                "Matrice & Riepilogo Chiusura Circolare (dalle ore 12:00)",
                 ln=True,
                 align="center",
             )
@@ -185,7 +185,7 @@ if uploaded_file is not None:
               pdf3.cell(35, 7, "OK", 1, 1, "L")
             pdf3_bytes = bytes(pdf3.output())
 
-            st.success("✅ Elaborazione e generazione completate con successo!")
+            st.success("✅ Elaborazione completata! Partenza impostata dalle 12:00.")
 
             st.download_button(
                 label="📥 Scarica PDF 1: Variazioni Servizio",
