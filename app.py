@@ -39,15 +39,17 @@ if uploaded_file is not None:
           genai.configure(api_key=api_key)
           model = genai.GenerativeModel("gemini-1.5-flash")
 
+          # Prompt corretto e blindato per evitare errori di formattazione
           prompt = (
-              "Analizza questa immagine di una tabella di cambi turno ferroviari."
-              " Estrai SOLO le righe in cui la terza colonna (Assegnato A) ha un"
-              " valore valido (ignora i riposi 'R', 'NO', i trattini '-' o i"
-              " campi vuoti). Restituisci i dati in formato strutturato"
-              " separato da punto e virgola per ogni riga valida in questo"
-              " esatto formato: COGNOME;CODICE;TURNO;ASSEGNATO_A. Includi anche"
-              " eventuali annotazioni manoscritte in fondo alla pagina se"
-              " presenti."
+              "Sei un assistente esperto nell'analisi di tabelle ferroviarie."
+              " Analizza questa immagine ed estrai SOLO le righe della tabella"
+              " principale che hanno un cambio assegnato valido nella colonna"
+              " di destra (scritta a mano). Ignora rigorosamente i riposi 'R',"
+              " 'NO', i trattini '-' o i campi vuoti. Per ogni riga valida,"
+              " restituisci i dati in un'unica riga di testo nel formato esatto:"
+              " COGNOME;CODICE;TURNO;ASSEGNATO_A. "
+              "Non aggiungere elenchi puntati, markdown o testo descrittivo"
+              " aggiuntivo: solo le righe separate da punto e virgola."
           )
 
           response = model.generate_content([prompt, uploaded_file.getvalue()])
@@ -55,6 +57,9 @@ if uploaded_file is not None:
 
           data_giornaliera = []
           for line in lines:
+            line = line.replace("*", "").strip()
+            if not line or ";" not in line:
+              continue
             parts = line.split(";")
             if len(parts) >= 4:
               data_giornaliera.append({
@@ -66,8 +71,8 @@ if uploaded_file is not None:
 
           if not data_giornaliera:
             st.error(
-                "Non è stato possibile estrarre dati validi. Verifica la"
-                " nitidezza della foto."
+                "Non è stato possibile estrarre dati validi. Assicurati che la"
+                " foto sia ben illuminata e leggibile."
             )
           else:
             details_map = {row["nome"]: row for row in data_giornaliera}
