@@ -88,8 +88,8 @@ if uploaded_file is not None:
         pdf.cell(50, 8, ricevente, 1, 0, "L")
         pdf.cell(60, 8, info["turno"], 1, 1, "L")
 
-      # Conversione corretta in bytes per Streamlit
-      pdf2_bytes = pdf.output(dest='S').encode('latin1')
+      # Sintassi nativa corretta per fpdf2 (restituisce direttamente bytes/bytearray)
+      pdf2_bytes = bytes(pdf.output())
 
       st.success("✅ PDF della catena generato con successo dalla tabella!")
 
