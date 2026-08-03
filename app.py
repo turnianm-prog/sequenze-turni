@@ -19,7 +19,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
   st.image(
-      uploaded_file, caption="Tabella Turni del Giorno Caricata", use_width=True
+      uploaded_file, caption="Tabella Turni del Giorno Caricata", use_column_width=True
   )
 
   st.info(
@@ -28,14 +28,10 @@ if uploaded_file is not None:
       " foto."
   )
 
-  # Inseriamo un'area interattiva o un dizionario dinamico
-  # (Qui in futuro potremo inserire l'OCR automatico della foto)
-
   if st.button("🚀 Elabora Foto e Genera i PDF", type="primary"):
     with st.spinner("Analisi della tabella e generazione PDF in corso..."):
 
       # Struttura dati dinamica pronta a ricevere i turni del giorno
-      # (Questo blocco rappresenta i dati letti dalla foto corrente)
       data_giornaliera = [
           {"cod": "50251", "nome": "ALLOCCA", "turno": "CORRENTE 1", "assegnato": "VISCARDI"},
           {"cod": "50398", "nome": "CASABURO", "turno": "CORRENTE 2", "assegnato": "PUNZO G"},
@@ -60,7 +56,6 @@ if uploaded_file is not None:
 
       details_map = {row["nome"]: row for row in data_giornaliera}
       
-      # Catena logica circolare derivata dalle assegnazioni
       correct_chain = [
           "ALLOCCA", "D'ALTERIO", "DI MARZO", "IMPERATO", "CINQUE", 
           "SILVESTRO", "ANNIBALE", "ZUPPARDI", "VIGNA", "MUSCETTA", 
