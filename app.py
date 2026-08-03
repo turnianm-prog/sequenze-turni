@@ -9,12 +9,11 @@ st.set_page_config(
 
 st.title("📋 Generatore Automatico dei 3 PDF Turni")
 st.write(
-    "Carica la foto della tabella: l'intelligenza artificiale leggerà"
-    " autonomamente i dati reali, filtrerà solo i cambi validi e ordinerà la"
-    " catena dalle ore 12:00."
+    "Carica la foto della tabella: l'IA leggerà i dati, filtrerà i cambi"
+    " validi e ordinerà la catena dalle ore 12:00."
 )
 
-# Recupera la chiave dai Secrets di Streamlit in modo automatico e sicuro
+# Recupera la chiave dai Secrets di Streamlit
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 uploaded_file = st.file_uploader(
@@ -111,17 +110,17 @@ if uploaded_file is not None:
             )
             pdf1.ln(5)
             pdf1.set_font("Arial", "B", 9)
-            pdf1.cell(10, 7, "N", 1, 0, "C", True)
-            pdf1.cell(60, 7, "Dipendente", 1, 0, "L", True)
-            pdf1.cell(60, 7, "Turno", 1, 0, "L", True)
-            pdf1.cell(60, 7, "Assegnato A", 1, 1, "L", True)
+            pdf1.cell(10, 7, "N", 1, 0, "C")
+            pdf1.cell(60, 7, "Dipendente", 1, 0, "L")
+            pdf1.cell(60, 7, "Turno", 1, 0, "L")
+            pdf1.cell(60, 7, "Assegnato A", 1, 1, "L")
             pdf1.set_font("Arial", "", 9)
             for idx, row in enumerate(data_giornaliera, 1):
               pdf1.cell(10, 7, str(idx), 1, 0, "C")
               pdf1.cell(60, 7, f"{row['nome']} ({row['cod']})", 1, 0, "L")
               pdf1.cell(60, 7, row["turno"], 1, 0, "L")
               pdf1.cell(60, 7, row["assegnato"], 1, 1, "L")
-            pdf1_bytes = bytes(pdf1.output())
+            pdf1_bytes = pdf1.output(dest="S").encode("latin1")
 
             # --- PDF 2: Catena Consequenziale ---
             pdf2 = FPDF()
@@ -152,7 +151,7 @@ if uploaded_file is not None:
               pdf2.cell(15, 7, "->", 1, 0, "C")
               pdf2.cell(50, 7, ricevente, 1, 0, "L")
               pdf2.cell(65, 7, info["turno"], 1, 1, "L")
-            pdf2_bytes = bytes(pdf2.output())
+            pdf2_bytes = pdf2.output(dest="S").encode("latin1")
 
             # --- PDF 3: Matrice & Riepilogo ---
             pdf3 = FPDF()
@@ -183,9 +182,9 @@ if uploaded_file is not None:
               pdf3.cell(55, 7, info["turno"], 1, 0, "L")
               pdf3.cell(45, 7, ricevente, 1, 0, "L")
               pdf3.cell(35, 7, "OK", 1, 1, "L")
-            pdf3_bytes = bytes(pdf3.output())
+            pdf3_bytes = pdf3.output(dest="S").encode("latin1")
 
-            st.success("✅ Elaborazione completata! Partenza impostata dalle 12:00.")
+            st.success("✅ PDF generati con successo dalle ore 12:00!")
 
             st.download_button(
                 label="📥 Scarica PDF 1: Variazioni Servizio",
@@ -207,4 +206,4 @@ if uploaded_file is not None:
             )
 
         except Exception as e:
-          st.error(f"Errore durante l'elaborazione con l'IA: {e}")
+          st.error(f"Errore durante l'elaborazione: {e}")
