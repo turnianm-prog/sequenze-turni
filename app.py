@@ -13,7 +13,6 @@ st.write(
     " validi e ordinerà la catena dalle ore 12:00."
 )
 
-# Recupera la chiave dai Secrets di Streamlit
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 uploaded_file = st.file_uploader(
@@ -120,7 +119,7 @@ if uploaded_file is not None:
               pdf1.cell(60, 7, f"{row['nome']} ({row['cod']})", 1, 0, "L")
               pdf1.cell(60, 7, row["turno"], 1, 0, "L")
               pdf1.cell(60, 7, row["assegnato"], 1, 1, "L")
-            pdf1_bytes = pdf1.output(dest="S").encode("latin1")
+            pdf1_bytes = bytes(pdf1.output())
 
             # --- PDF 2: Catena Consequenziale ---
             pdf2 = FPDF()
@@ -151,7 +150,7 @@ if uploaded_file is not None:
               pdf2.cell(15, 7, "->", 1, 0, "C")
               pdf2.cell(50, 7, ricevente, 1, 0, "L")
               pdf2.cell(65, 7, info["turno"], 1, 1, "L")
-            pdf2_bytes = pdf2.output(dest="S").encode("latin1")
+            pdf2_bytes = bytes(pdf2.output())
 
             # --- PDF 3: Matrice & Riepilogo ---
             pdf3 = FPDF()
@@ -182,7 +181,7 @@ if uploaded_file is not None:
               pdf3.cell(55, 7, info["turno"], 1, 0, "L")
               pdf3.cell(45, 7, ricevente, 1, 0, "L")
               pdf3.cell(35, 7, "OK", 1, 1, "L")
-            pdf3_bytes = pdf3.output(dest="S").encode("latin1")
+            pdf3_bytes = bytes(pdf3.output())
 
             st.success("✅ PDF generati con successo dalle ore 12:00!")
 
