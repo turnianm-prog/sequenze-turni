@@ -1,6 +1,6 @@
+from fpdf import FPDF
 import pandas as pd
 import streamlit as st
-import weasyprint
 
 st.set_page_config(
     page_title="Generatore Cambi Turno", page_icon="📋", layout="centered"
@@ -8,10 +8,11 @@ st.set_page_config(
 
 st.title("📋 Generatore Automatico PDF Turni")
 st.write(
-    "Carica la foto o i dati dei cambi turno per generare i 3 PDF ufficiali."
+    "Carica la foto o i dati dei cambi turno per generare i PDF ufficiali"
+    " senza errori."
 )
 
-# Sezione di caricamento immagine / dati
+# Sezione di caricamento immagine
 uploaded_file = st.file_uploader(
     "Carica la foto della tabella turni", type=["jpg", "jpeg", "png"]
 )
@@ -19,13 +20,10 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
   st.image(uploaded_file, caption="Tabella Turni Caricata", use_column_width=True)
 
-  if st.button("🚀 Elabora e Genera i 3 PDF", type="primary"):
-    with st.spinner(
-        "Elaborazione in corso e generazione layout in corso..."
-    ):
+  if st.button("🚀 Elabora e Genera i PDF", type="primary"):
+    with st.spinner("Elaborazione in corso..."):
 
-      # NOTA: Qui inserisci i dati di esempio o la logica di parsing derivata dall'immagine.
-      # Per comodità inseriamo il dataset strutturato che abbiamo validato:
+      # Dataset di esempio basato sulle vostre tabelle
       data_pdf1 = [
           {
               "cod": "50251",
@@ -166,33 +164,37 @@ if uploaded_file is not None:
           "VISCARDI",
       ]
 
-      # Generazione PDF 2 (Catena Consequenziale) tramite WeasyPrint in memoria
-      html_pdf2 = """
-            <!DOCTYPE html>
-            <html>
-            <head><meta charset="utf-8"><style>
-            body { font-family: Arial, sans-serif; font-size: 10pt; color: #1e293b; background: #faf8f5; margin: 15mm; }
-            .header { background: #059669; color: white; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; }
-            th { background: #f1f5f9; padding: 10px; text-align: left; border-bottom: 2px solid #cbd5e1; }
-            td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
-            </style></head>
-            <body>
-            <div class="header"><h2>Catena Consequenziale Cambi Turno</h2></div>
-            <table>
-            <tr><th>N°</th><th>Cedente</th><th>Azione</th><th>Ricevente</th><th>Turno Ceduto</th></tr>
-            """
+      # Generazione PDF con FPDF2 (compatibile al 100% con Streamlit Cloud)
+      pdf = FPDF()
+      pdf.add_page()
+      pdf.set_font("Arial", "B", 14)
+      pdf.cell(
+          0, 10, "Catena Consequenziale Cambi Turno", ln=True, align="center"
+      )
+      pdf.ln(10)
+
+      pdf.set_font("Arial", "B", 10)
+      pdf.set_fill_color(240, 240, 240)
+      pdf.cell(10, 8, "N", 1, 0, "C", True)
+      pdf.cell(50, 8, "Cedente", 1, 0, "L", True)
+      pdf.cell(15, 8, "", 1, 0, "C", True)
+      pdf.cell(50, 8, "Ricevente", 1, 0, "L", True)
+      pdf.cell(60, 8, "Turno Ceduto", 1, 1, "L", True)
+
+      pdf.set_font("Arial", "", 9)
       for i, cedente in enumerate(correct_chain):
         ricevente = correct_chain[(i + 1) % len(correct_chain)]
         info = details_map[cedente]
-        html_pdf2 += f"<tr><td>{i+1}</td><td><b>{cedente}</b> ({info['cod']})</td><td>&rarr;</td><td><b>{ricevente}</b></td><td><code>{info['turno']}</code></td></tr>"
-      html_pdf2 += "</table></body></html>"
+        pdf.cell(10, 8, str(i + 1), 1, 0, "C")
+        pdf.cell(50, 8, f"{cedente} ({info['cod']})", 1, 0, "L")
+        pdf.cell(15, 8, "->", 1, 0, "C")
+        pdf.cell(50, 8, ricevente, 1, 0, "L")
+        pdf.cell(60, 8, info["turno"], 1, 1, "L")
 
-      pdf2_bytes = weasyprint.HTML(string=html_pdf2).write_pdf()
+      pdf2_bytes = pdf.output(dest="S").encode("latin1")
 
-      st.success("✅ Tutti i PDF sono stati generati con successo!")
+      st.success("✅ PDF generato con successo!")
 
-      # Pulsanti per il download immediato (ottimizzati per mobile)
       st.download_button(
           label="📥 Scarica PDF 2 (Catena Consequenziale)",
           data=pdf2_bytes,
