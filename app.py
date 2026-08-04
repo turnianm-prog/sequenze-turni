@@ -38,8 +38,7 @@ def estrai_orario_inizio(turno_str):
 
 def analizza_foto_con_gemini(uploaded_file, api_key):
     """
-    Step 1: Utilizza Google Gemini per leggere la foto del foglio manoscritto.
-    Utilizza gemini-1.5-flash per massimizzare la quota del piano gratuito.
+    Step 1: Utilizza Google Gemini 2.0 per leggere la foto del foglio manoscritto.
     """
     client = genai.Client(api_key=api_key)
     image = Image.open(uploaded_file)
@@ -63,21 +62,18 @@ def analizza_foto_con_gemini(uploaded_file, api_key):
     ]
     """
 
-    # Usa gemini-1.5-flash che ha limiti gratuiti più ampi
-    model_name = 'gemini-1.5-flash'
-    
     try:
         response = client.models.generate_content(
-            model=model_name,
+            model='gemini-2.0-flash',
             contents=[image, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
             ),
         )
     except Exception as e:
-        # Fallback su gemini-2.0-flash-lite se 1.5 risponde con errore
-        if "429" in str(e):
-            time_lib.sleep(2)
+        # Tenta il modello lite se il principale va in errore di limit o 404
+        if "429" in str(e) or "404" in str(e):
+            time_lib.sleep(1)
             response = client.models.generate_content(
                 model='gemini-2.0-flash-lite',
                 contents=[image, prompt],
@@ -193,7 +189,7 @@ if uploaded_file is not None:
                         st.success("Estrazione completata con successo!")
                     except Exception as e:
                         if "429" in str(e):
-                            st.error("⏳ Quota API temporaneamente esaurita! Attendi 60 secondi prima di riprovare.")
+                            st.error("⏳ Quota API esaurita. Genera una nuova chiave API gratuita su AI Studio o attendi 60 secondi.")
                         else:
                             st.error(f"Errore durante l'analisi dell'immagine: {e}")
                         
