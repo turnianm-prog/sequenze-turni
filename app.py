@@ -15,9 +15,6 @@ st.set_page_config(
 # --- FUNZIONI DI SUPPORTO ---
 
 def estrai_orario_inizio(turno_str):
-    """
-    Estrae l'orario di inizio da una stringa di turno (es. 'NL 12:50 06:17', '11,05', '184 5,35').
-    """
     if pd.isna(turno_str):
         return time(23, 59)
     
@@ -43,7 +40,6 @@ def analizza_foto_con_ai(uploaded_file, api_key):
     """
     client = OpenAI(api_key=api_key)
     
-    # Converti immagine in Base64
     bytes_data = uploaded_file.getvalue()
     base64_image = base64.b64encode(bytes_data).decode('utf-8')
     
@@ -98,10 +94,6 @@ def analizza_foto_con_ai(uploaded_file, api_key):
 
 
 def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
-    """
-    Step 2: Inversione logica del flusso (dal basso verso l'alto con ruoli scambiati) 
-    e rotazione dell'anello partendo dal turno ~12:00+.
-    """
     df_filtered = df.dropna(subset=[col_ass]).copy()
     df_filtered[col_ass] = df_filtered[col_ass].astype(str).str.strip()
     df_filtered = df_filtered[~df_filtered[col_ass].str.upper().isin(['', 'NAN', 'NONE', '-', 'NULL'])]
@@ -121,7 +113,6 @@ def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
             'orario_inizio': estrai_orario_inizio(row[col_tur])
         })
     
-    # Individuazione turno delle 12:00 o subito successivo
     orari_validi = [s for s in scambi if s['orario_inizio'] >= target_hour and s['orario_inizio'] != time(23, 59)]
     
     if not orari_validi:
@@ -132,7 +123,6 @@ def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
     else:
         start_item = min(orari_validi, key=lambda x: (x['orario_inizio'].hour - target_hour.hour)*60 + (x['orario_inizio'].minute - target_hour.minute))
     
-    # Generazione della catena ciclica
     start_idx = scambi.index(start_item)
     n = len(scambi)
     
@@ -154,15 +144,23 @@ def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
 
 st.title("🔄 Generatore Catena di Scambi Turni")
 
-# Gestione API Key OpenAI nella Sidebar
 st.sidebar.header("⚙️ Configurazione API")
 
-api_key = st.sidebar.text_input("OpenAI API Key", type="password", help="Inserisci qui la tua chiave API OpenAI")
+# Cerca prima la chiave nei Secrets di Streamlit Cloud
+api_key = ""
+if "OPENAI_API_KEY" in st.secrets:
+    api_key = st.secrets["OPENAI_API_KEY"]
 
-if not api_key:
-    # Controlla se la chiave è presente nei secrets di Streamlit Cloud
-    if "OPENAI_API_KEY" in st.secrets:
-        api_key = st.secrets["OPENAI_API_KEY"]
+# Se non c'è nei Secrets, consente l'inserimento manuale
+api_key_input = st.sidebar.text_input(
+    "OpenAI API Key", 
+    value=api_key, 
+    type="password", 
+    help="Inserisci la tua chiave OpenAI che inizia con sk-..."
+)
+
+if api_key_input:
+    api_key = api_key_input
 
 uploaded_file = st.sidebar.file_uploader(
     "Carica Foto (JPG/PNG) o File (CSV/XLSX)", 
@@ -172,21 +170,18 @@ uploaded_file = st.sidebar.file_uploader(
 if uploaded_file is not None:
     file_type = uploaded_file.name.split('.')[-1].lower()
     
-    # Inizializza o recupera lo Step 1 da session state
     if "df_step1" not in st.session_state:
         st.session_state.df_step1 = pd.DataFrame()
     
-    # ====================================================
-    # STEP 1: Analisi Foto / Caricamento Dati
-    # ====================================================
+    # STEP 1
     st.header("📌 Step 1: Estrazione Tabella Variazioni")
     
     if file_type in ["png", "jpg", "jpeg"]:
         st.image(uploaded_file, caption="Foto Caricata", width=450)
         
-        if st.button("🔍 Leggi Foto con AI Vision"):
+        if st.button("🔍 Leggi Foto con OpenAI Vision"):
             if not api_key:
-                st.error("⚠️ Inserisci la chiave API OpenAI nella barra laterale per procedere con l'analisi della foto.")
+                st.error("⚠️ Inserisci la chiave API OpenAI nella barra laterale o nei Secrets di Streamlit.")
             else:
                 with st.spinner("L'AI sta analizzando la foto del foglio manoscritto..."):
                     try:
@@ -199,7 +194,6 @@ if uploaded_file is not None:
         if st.session_state.df_step1.empty:
             st.session_state.df_step1 = pd.read_csv(uploaded_file) if file_type == "csv" else pd.read_excel(uploaded_file)
 
-    # Editor Tabella Step 1
     if not st.session_state.df_step1.empty:
         st.subheader("Tabella Dati Estratti (Modificabile)")
         st.session_state.df_step1 = st.data_editor(
@@ -209,7 +203,6 @@ if uploaded_file is not None:
             key="editor_step1"
         )
         
-        # Download dati Step 1
         csv_s1 = st.session_state.df_step1.to_csv(index=False).encode('utf-8')
         st.download_button(
             "📥 Scarica Dati Step 1 (CSV)",
@@ -218,9 +211,7 @@ if uploaded_file is not None:
             mime="text/csv"
         )
 
-    # ====================================================
-    # STEP 2: Calcolo Catena di Scambi Reale
-    # ====================================================
+    # STEP 2
     st.markdown("---")
     st.header("📌 Step 2: Generazione Catena di Scambi Reale")
     
@@ -249,12 +240,10 @@ if uploaded_file is not None:
                 st.subheader("Tabella Finale della Catena")
                 st.dataframe(res_df, use_container_width=True, hide_index=True)
                 
-                # Verifica ciclo
                 primo = res_df.iloc[0]['Chi cede']
                 ultimo = res_df.iloc[-1]['Chi riceve']
                 st.info(f"💡 **Verifica Anello**: La catena parte da **{primo}** (turno delle 12:00+) e si chiude al passaggio #{len(res_df)} con **{ultimo}** come ultimo ricevente.")
                 
-                # Download finale
                 csv_s2 = res_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     "📥 Scarica Tabella Catena Reale Finale (CSV)",
