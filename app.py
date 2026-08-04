@@ -33,30 +33,34 @@ if uploaded_file is not None:
     )
   else:
     if st.button("🚀 Esegui Step 1 e Step 2", type="primary"):
-      with st.spinner("Elaborazione in corso..."):
+      with st.spinner("Elaborazione e lettura foto in corso..."):
         try:
           genai.configure(api_key=api_key)
           model = genai.GenerativeModel("gemini-1.5-flash")
 
-          # Prompt per estrarre i dati grezzi validi
+          # Prompt blindato per gestire le scritte a mano e le annotazioni della foto
           prompt = (
-              "Analizza questa immagine di una tabella di cambi turno ferroviari."
-              " Estrai SOLO le righe in cui la terza colonna (Assegnato A) ha un"
-              " valore valido (ignora i riposi 'R', 'NO', i trattini '-' o i"
-              " campi vuoti). Restituisci i dati in formato strutturato"
-              " separato da punto e virgola in questo esatto formato:"
-              " COGNOME;CODICE;TURNO;ASSEGNATO_A."
+              "Sei un assistente esperto in turni ferroviari. Analizza questa"
+              " immagine. Estrai unicamente le righe della tabella in cui è"
+              " presente un cambio valido scritto a mano (ignora rigorosamente"
+              " i riposi 'R', 'NO', i trattini '-' o i campi vuoti). Per ogni"
+              " riga valida, restituisci i dati strettamente nel formato:"
+              " COGNOME;CODICE;TURNO;ASSEGNATO_A. Non inserire markdown, elenchi"
+              " puntati o testo descrittivo extra, solo righe separate da punto e"
+              " virgola."
           )
 
           response = model.generate_content([prompt, uploaded_file.getvalue()])
 
           if not response or not response.text:
-            st.error("L'IA non ha restituito alcun testo.")
+            st.error(
+                "L'intelligenza artificiale non ha restituito alcuna risposta."
+            )
           else:
             lines = response.text.strip().split("\n")
             data_giornaliera = []
             for line in lines:
-              line = line.replace("*", "").strip()
+              line = line.replace("*", "").replace("`", "").strip()
               if not line or ";" not in line:
                 continue
               parts = line.split(";")
@@ -69,13 +73,15 @@ if uploaded_file is not None:
                 })
 
             if not data_giornaliera:
-              st.error("Nessun dato valido estratto dalla foto.")
+              st.error(
+                  "Impossibile estrarre righe valide. Ecco il testo grezzo"
+                  f" restituito dall'IA per controllo: \n\n{response.text}"
+              )
             else:
               # ==========================================
               # STEP 1: Generazione PDF 1 e PDF 2 (Grezzi/Base)
               # ==========================================
 
-              # PDF 1: Tabella completa delle variazioni (ordine foto, filtrata)
               pdf1 = FPDF()
               pdf1.add_page()
               pdf1.set_font("Arial", "B", 12)
@@ -100,7 +106,6 @@ if uploaded_file is not None:
                 pdf1.cell(60, 7, row["assegnato"], 1, 1, "L")
               pdf1_bytes = bytes(pdf1.output())
 
-              # PDF 2: Catena consequenziale flusso base
               names_step1 = [row["nome"] for row in data_giornaliera]
               details_map = {row["nome"]: row for row in data_giornaliera}
 
@@ -137,18 +142,10 @@ if uploaded_file is not None:
               # ==========================================
               # STEP 2: Analisi a cascata invertita & Chiusura Anello
               # ==========================================
-              # Regola:
-              # - Chi cede = Assegnato A (destinatario originario)
-              # - Chi riceve = Dipendente originario
-              # - Direzione dal basso verso l'alto
-              # - Partenza dal turno attorno/dopo le 12:00
-              # - Chiusura cerchio (chi avvia finisce in fondo come ultimo ricevente)
-
-              # Costruiamo la lista mappata con la logica invertita
               scambi_invertiti = []
               for row in data_giornaliera:
-                cedente = row["assegnato"]  # Chi cede (ex Assegnato)
-                ricevente = row["nome"]  # Chi riceve (ex Dipendente)
+                cedente = row["assegnato"]
+                ricevente = row["nome"]
                 turno = row["turno"]
                 scambi_invertiti.append({
                     "cedente": cedente,
@@ -156,10 +153,8 @@ if uploaded_file is not None:
                     "turno": turno,
                 })
 
-              # Invertiamo l'ordine (dal basso verso l'alto)
               scambi_invertiti.reverse()
 
-              # Individuiamo il punto di inizio: il turno dalle ore 12:00 in poi
               start_idx = 0
               for idx, item in enumerate(scambi_invertiti):
                 turno_str = item["turno"]
@@ -178,12 +173,10 @@ if uploaded_file is not None:
                   start_idx = idx
                   break
 
-              # Riordiniamo la catena partendo da quel punto
               catena_ordinata = (
                   scambi_invertiti[start_idx:] + scambi_invertiti[:start_idx]
               )
 
-              # PDF 3: Tabella Finale Ricorsiva Step 2
               pdf3 = FPDF()
               pdf3.add_page()
               pdf3.set_font("Arial", "B", 12)
@@ -236,4 +229,4 @@ if uploaded_file is not None:
               )
 
         except Exception as e:
-          st.error(f"Errore durante l'elaborazione dei 2 Step: {e}")
+          st.error(f"Errore tecnico durante l'elaborazione: {e}")
