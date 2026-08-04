@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import json
+import time as time_lib
 from datetime import time
 from PIL import Image
 from google import genai
@@ -16,9 +17,6 @@ st.set_page_config(
 # --- FUNZIONI DI SUPPORTO ---
 
 def estrai_orario_inizio(turno_str):
-    """
-    Estrae l'orario di inizio da una stringa di turno (es. 'NL 12:50 06:17', '184 5,35', '11,05').
-    """
     if pd.isna(turno_str):
         return time(23, 59)
     
@@ -40,7 +38,8 @@ def estrai_orario_inizio(turno_str):
 
 def analizza_foto_con_gemini(uploaded_file, api_key):
     """
-    Step 1: Utilizza Google Gemini 2.0 Flash per leggere la foto del foglio manoscritto a 2 colonne.
+    Step 1: Utilizza Google Gemini per leggere la foto del foglio manoscritto.
+    Utilizza gemini-1.5-flash per massimizzare la quota del piano gratuito.
     """
     client = genai.Client(api_key=api_key)
     image = Image.open(uploaded_file)
@@ -64,13 +63,30 @@ def analizza_foto_con_gemini(uploaded_file, api_key):
     ]
     """
 
-    response = client.models.generate_content(
-        model='gemini-2.0-flash',
-        contents=[image, prompt],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-        ),
-    )
+    # Usa gemini-1.5-flash che ha limiti gratuiti più ampi
+    model_name = 'gemini-1.5-flash'
+    
+    try:
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[image, prompt],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            ),
+        )
+    except Exception as e:
+        # Fallback su gemini-2.0-flash-lite se 1.5 risponde con errore
+        if "429" in str(e):
+            time_lib.sleep(2)
+            response = client.models.generate_content(
+                model='gemini-2.0-flash-lite',
+                contents=[image, prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
+            )
+        else:
+            raise e
     
     parsed = json.loads(response.text)
     
@@ -85,10 +101,6 @@ def analizza_foto_con_gemini(uploaded_file, api_key):
 
 
 def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
-    """
-    Step 2: Inversione flusso (dal basso verso l'alto con ruoli scambiati) 
-    e rotazione dell'anello dal turno ~12:00+.
-    """
     df_filtered = df.dropna(subset=[col_ass]).copy()
     df_filtered[col_ass] = df_filtered[col_ass].astype(str).str.strip()
     df_filtered = df_filtered[~df_filtered[col_ass].str.upper().isin(['', 'NAN', 'NONE', '-', 'NULL'])]
@@ -96,7 +108,6 @@ def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
     if df_filtered.empty:
         return None, "Nessuna riga valida trovata nella tabella."
 
-    # Inversione dal basso verso l'alto
     df_reversed = df_filtered.iloc[::-1].reset_index(drop=True)
     
     scambi = []
@@ -149,7 +160,7 @@ api_key_input = st.sidebar.text_input(
     "Gemini API Key", 
     value=api_key, 
     type="password", 
-    help="Inserisci la tua chiave Google Gemini (inizia con AQ...)"
+    help="Inserisci la tua chiave Google Gemini"
 )
 
 if api_key_input:
@@ -181,7 +192,10 @@ if uploaded_file is not None:
                         st.session_state.df_step1 = analizza_foto_con_gemini(uploaded_file, api_key)
                         st.success("Estrazione completata con successo!")
                     except Exception as e:
-                        st.error(f"Errore durante l'analisi dell'immagine: {e}")
+                        if "429" in str(e):
+                            st.error("⏳ Quota API temporaneamente esaurita! Attendi 60 secondi prima di riprovare.")
+                        else:
+                            st.error(f"Errore durante l'analisi dell'immagine: {e}")
                         
     elif file_type in ["csv", "xlsx"]:
         if st.session_state.df_step1.empty:
