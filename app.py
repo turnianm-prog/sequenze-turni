@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import re
 import json
-import base64
 from datetime import time
-from openai import OpenAI
+from PIL import Image
+from google import genai
+from google.genai import types
 
 st.set_page_config(
     page_title="Generatore Catena di Scambi Turni",
@@ -34,14 +35,12 @@ def estrai_orario_inizio(turno_str):
     return time(23, 59)
 
 
-def analizza_foto_con_ai(uploaded_file, api_key):
+def analizza_foto_con_gemini(uploaded_file, api_key):
     """
-    Step 1: Utilizza GPT-4o-mini per leggere la foto del foglio manoscritto a 2 colonne.
+    Step 1: Utilizza Google Gemini Flash per leggere la foto del foglio manoscritto.
     """
-    client = OpenAI(api_key=api_key)
-    
-    bytes_data = uploaded_file.getvalue()
-    base64_image = base64.b64encode(bytes_data).decode('utf-8')
+    client = genai.Client(api_key=api_key)
+    image = Image.open(uploaded_file)
     
     prompt = """
     Sei un assistente esperto nella lettura di tabelle di turno di servizio scritte a mano.
@@ -54,43 +53,27 @@ def analizza_foto_con_ai(uploaded_file, api_key):
     2. 'Turno': estrai la stringa esatta del turno (es. ALIB 11:35 06:25, 184 5,35, NL 18,10, ecc.).
     3. 'Assegnato': estrai il cognome del destinatario scritto a mano a destra (es. CONSON, PACE, BRUNO, ecc.).
     
-    Restituisci unicamente un oggetto JSON contenente un array di oggetti con le chiavi: "Dipendente", "Turno", "Assegnato".
-    Esempio di output:
-    {
-      "dati": [
-        {"Dipendente": "ALLOCCA", "Turno": "ALIB 11:35 06:25", "Assegnato": "CONSON"},
-        {"Dipendente": "BATTISTA", "Turno": "ALIB 11,50", "Assegnato": "PACE"}
-      ]
-    }
+    Restituisci unicamente una risposta formattata in JSON valido come lista di oggetti con le chiavi: "Dipendente", "Turno", "Assegnato".
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
-                    }
-                ]
-            }
-        ],
-        response_format={"type": "json_object"}
+    response = client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=[image, prompt],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
     )
     
-    raw_content = response.choices[0].message.content
-    parsed = json.loads(raw_content)
+    parsed = json.loads(response.text)
     
-    if "dati" in parsed:
-        return pd.DataFrame(parsed["dati"])
-    else:
+    if isinstance(parsed, list):
+        return pd.DataFrame(parsed)
+    elif isinstance(parsed, dict):
         for val in parsed.values():
             if isinstance(val, list):
                 return pd.DataFrame(val)
-    return pd.DataFrame(parsed)
+        return pd.DataFrame([parsed])
+    return pd.DataFrame()
 
 
 def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
@@ -146,17 +129,15 @@ st.title("🔄 Generatore Catena di Scambi Turni")
 
 st.sidebar.header("⚙️ Configurazione API")
 
-# Cerca prima la chiave nei Secrets di Streamlit Cloud
 api_key = ""
-if "OPENAI_API_KEY" in st.secrets:
-    api_key = st.secrets["OPENAI_API_KEY"]
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
 
-# Se non c'è nei Secrets, consente l'inserimento manuale
 api_key_input = st.sidebar.text_input(
-    "OpenAI API Key", 
+    "Gemini API Key", 
     value=api_key, 
     type="password", 
-    help="Inserisci la tua chiave OpenAI che inizia con sk-..."
+    help="Inserisci la tua chiave Google Gemini"
 )
 
 if api_key_input:
@@ -179,13 +160,13 @@ if uploaded_file is not None:
     if file_type in ["png", "jpg", "jpeg"]:
         st.image(uploaded_file, caption="Foto Caricata", width=450)
         
-        if st.button("🔍 Leggi Foto con OpenAI Vision"):
+        if st.button("🔍 Leggi Foto con Gemini AI"):
             if not api_key:
-                st.error("⚠️ Inserisci la chiave API OpenAI nella barra laterale o nei Secrets di Streamlit.")
+                st.error("⚠️ Inserisci la chiave API Gemini nella barra laterale o nei Secrets di Streamlit.")
             else:
                 with st.spinner("L'AI sta analizzando la foto del foglio manoscritto..."):
                     try:
-                        st.session_state.df_step1 = analizza_foto_con_ai(uploaded_file, api_key)
+                        st.session_state.df_step1 = analizza_foto_con_gemini(uploaded_file, api_key)
                         st.success("Estrazione completata con successo!")
                     except Exception as e:
                         st.error(f"Errore durante l'analisi dell'immagine: {e}")
@@ -242,7 +223,7 @@ if uploaded_file is not None:
                 
                 primo = res_df.iloc[0]['Chi cede']
                 ultimo = res_df.iloc[-1]['Chi riceve']
-                st.info(f"💡 **Verifica Anello**: La catena parte da **{primo}** (turno delle 12:00+) e si chiude al passaggio #{len(res_df)} con **{ultimo}** come ultimo ricevente.")
+                st.info(f"💡 **Verifica Anello**: La catena parte da **{primo}** e si chiude con **{ultimo}** al passaggio #{len(res_df)}.")
                 
                 csv_s2 = res_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
