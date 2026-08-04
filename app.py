@@ -1,6 +1,7 @@
 from fpdf import FPDF
 import google.generativeai as genai
 import pandas as pd
+from PIL import Image
 import streamlit as st
 
 st.set_page_config(
@@ -11,8 +12,8 @@ st.set_page_config(
 
 st.title("📋 Generatore Turni - Procedura a 2 Step")
 st.write(
-    "Carica la foto: il sistema eseguirà prima l'estrazione e i primi 2 PDF,"
-    " e successivamente la catena a cascata invertita dalle ore 12:00."
+    "Carica la foto: il sistema eseguirà l'estrazione tramite PIL e i 2"
+    " step successivi."
 )
 
 api_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -22,9 +23,9 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-  st.image(
-      uploaded_file, caption="Tabella Turni del Giorno Caricata", use_column_width=True
-  )
+  # Apriamo l'immagine in modo sicuro con PIL
+  image = Image.open(uploaded_file)
+  st.image(image, caption="Tabella Turni del Giorno Caricata", use_column_width=True)
 
   if not api_key:
     st.error(
@@ -38,19 +39,18 @@ if uploaded_file is not None:
           genai.configure(api_key=api_key)
           model = genai.GenerativeModel("gemini-1.5-flash")
 
-          # Prompt blindato per gestire le scritte a mano e le annotazioni della foto
           prompt = (
-              "Sei un assistente esperto in turni ferroviari. Analizza questa"
-              " immagine. Estrai unicamente le righe della tabella in cui è"
-              " presente un cambio valido scritto a mano (ignora rigorosamente"
-              " i riposi 'R', 'NO', i trattini '-' o i campi vuoti). Per ogni"
-              " riga valida, restituisci i dati strettamente nel formato:"
-              " COGNOME;CODICE;TURNO;ASSEGNATO_A. Non inserire markdown, elenchi"
-              " puntati o testo descrittivo extra, solo righe separate da punto e"
-              " virgola."
+              "Analizza questa immagine di una tabella di cambi turno"
+              " ferroviari. Estrai tutte le righe valide in cui la terza"
+              " colonna (Assegnato A) contiene un nome scritto a mano o un"
+              " cambio valido (ignora riposi 'R', 'NO', trattini o vuoti)."
+              " Restituisci i dati rigorosamente in questo formato per riga,"
+              " senza markdown o commenti aggiuntivi:"
+              " COGNOME;CODICE;TURNO;ASSEGNATO_A"
           )
 
-          response = model.generate_content([prompt, uploaded_file.getvalue()])
+          # Passiamo l'oggetto immagine PIL al modello
+          response = model.generate_content([prompt, image])
 
           if not response or not response.text:
             st.error(
@@ -74,14 +74,13 @@ if uploaded_file is not None:
 
             if not data_giornaliera:
               st.error(
-                  "Impossibile estrarre righe valide. Ecco il testo grezzo"
-                  f" restituito dall'IA per controllo: \n\n{response.text}"
+                  "Impossibile estrarre righe valide. Testo grezzo"
+                  f" dell'IA:\n\n{response.text}"
               )
             else:
               # ==========================================
-              # STEP 1: Generazione PDF 1 e PDF 2 (Grezzi/Base)
+              # STEP 1: Generazione PDF 1 e PDF 2 (Base)
               # ==========================================
-
               pdf1 = FPDF()
               pdf1.add_page()
               pdf1.set_font("Arial", "B", 12)
