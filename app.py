@@ -16,6 +16,9 @@ st.set_page_config(
 # --- FUNZIONI DI SUPPORTO ---
 
 def estrai_orario_inizio(turno_str):
+    """
+    Estrae l'orario di inizio da una stringa di turno (es. 'NL 12:50 06:17', '184 5,35', '11,05').
+    """
     if pd.isna(turno_str):
         return time(23, 59)
     
@@ -37,7 +40,7 @@ def estrai_orario_inizio(turno_str):
 
 def analizza_foto_con_gemini(uploaded_file, api_key):
     """
-    Step 1: Utilizza Google Gemini Flash per leggere la foto del foglio manoscritto.
+    Step 1: Utilizza Google Gemini 2.0 Flash per leggere la foto del foglio manoscritto a 2 colonne.
     """
     client = genai.Client(api_key=api_key)
     image = Image.open(uploaded_file)
@@ -54,10 +57,15 @@ def analizza_foto_con_gemini(uploaded_file, api_key):
     3. 'Assegnato': estrai il cognome del destinatario scritto a mano a destra (es. CONSON, PACE, BRUNO, ecc.).
     
     Restituisci unicamente una risposta formattata in JSON valido come lista di oggetti con le chiavi: "Dipendente", "Turno", "Assegnato".
+    Esempio di output:
+    [
+      {"Dipendente": "ALLOCCA", "Turno": "ALIB 11:35 06:25", "Assegnato": "CONSON"},
+      {"Dipendente": "BATTISTA", "Turno": "ALIB 11,50", "Assegnato": "PACE"}
+    ]
     """
 
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model='gemini-2.0-flash',
         contents=[image, prompt],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -77,6 +85,10 @@ def analizza_foto_con_gemini(uploaded_file, api_key):
 
 
 def genera_catena_reale(df, col_dip, col_tur, col_ass, target_hour=time(12, 0)):
+    """
+    Step 2: Inversione flusso (dal basso verso l'alto con ruoli scambiati) 
+    e rotazione dell'anello dal turno ~12:00+.
+    """
     df_filtered = df.dropna(subset=[col_ass]).copy()
     df_filtered[col_ass] = df_filtered[col_ass].astype(str).str.strip()
     df_filtered = df_filtered[~df_filtered[col_ass].str.upper().isin(['', 'NAN', 'NONE', '-', 'NULL'])]
@@ -137,7 +149,7 @@ api_key_input = st.sidebar.text_input(
     "Gemini API Key", 
     value=api_key, 
     type="password", 
-    help="Inserisci la tua chiave Google Gemini"
+    help="Inserisci la tua chiave Google Gemini (inizia con AQ...)"
 )
 
 if api_key_input:
@@ -164,7 +176,7 @@ if uploaded_file is not None:
             if not api_key:
                 st.error("⚠️ Inserisci la chiave API Gemini nella barra laterale o nei Secrets di Streamlit.")
             else:
-                with st.spinner("L'AI sta analizzando la foto del foglio manoscritto..."):
+                with st.spinner("Gemini AI sta analizzando la foto del foglio manoscritto..."):
                     try:
                         st.session_state.df_step1 = analizza_foto_con_gemini(uploaded_file, api_key)
                         st.success("Estrazione completata con successo!")
@@ -223,7 +235,7 @@ if uploaded_file is not None:
                 
                 primo = res_df.iloc[0]['Chi cede']
                 ultimo = res_df.iloc[-1]['Chi riceve']
-                st.info(f"💡 **Verifica Anello**: La catena parte da **{primo}** e si chiude con **{ultimo}** al passaggio #{len(res_df)}.")
+                st.info(f"💡 **Verifica Anello**: La catena parte da **{primo}** (turno delle 12:00+) e si chiude al passaggio #{len(res_df)} con **{ultimo}** come ultimo ricevente.")
                 
                 csv_s2 = res_df.to_csv(index=False).encode('utf-8')
                 st.download_button(
