@@ -37,7 +37,7 @@ if uploaded_file is not None:
       with st.spinner("Elaborazione e lettura foto in corso..."):
         try:
           genai.configure(api_key=api_key)
-          model = genai.GenerativeModel("gemini-1.5-flash")
+          model = genai.GenerativeModel("gemini-2.5-flash")
 
           prompt = (
               "Analizza questa immagine di una tabella di cambi turno"
